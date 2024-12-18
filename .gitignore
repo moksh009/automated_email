@@ -1,1 +1,8 @@
+# Exclude environment variables
 .env
+
+# Exclude node_modules
+node_modules/
+
+# Exclude build files
+dist/
