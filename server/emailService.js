@@ -10,6 +10,26 @@ console.log('Creating email transporter with config:', {
   }
 });
 
+// Helper function to preserve line breaks and formatting
+const preserveFormatting = (content) => {
+  return content
+    .replace(/\n/g, '<br>')  // Convert newlines to <br> tags
+    .replace(/\r/g, '')      // Remove carriage returns
+    .replace(/\s{2,}/g, ' ') // Replace multiple spaces with single space
+    .trim();                 // Remove leading/trailing whitespace
+};
+
+// Helper function to convert HTML to plain text while preserving formatting
+const htmlToPlainText = (html) => {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')  // Convert <br> to newline
+    .replace(/<\/p>/gi, '\n\n')     // Convert </p> to double newline
+    .replace(/<[^>]*>/g, '')        // Remove remaining HTML tags
+    .replace(/&nbsp;/g, ' ')        // Convert &nbsp; to space
+    .replace(/\n\s*\n\s*\n/g, '\n\n')  // Remove excessive newlines
+    .trim();
+};
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -38,18 +58,31 @@ const sendEmail = async (emailData) => {
     
     const { to, subject, content, attachments = [] } = emailData;
     
+    // Preserve formatting in both HTML and plain text
+    const htmlContent = preserveFormatting(content);
+    const plainTextContent = htmlToPlainText(htmlContent);
+    
     console.log('Preparing mail options');
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to,
       subject,
-      html: content,
-      text: content.replace(/<[^>]*>/g, ''),
-      attachments: attachments.map(attachment => ({
-        filename: attachment.filename,
-        content: attachment.content,
-        contentType: attachment.contentType
-      }))
+      html: htmlContent,
+      text: plainTextContent,
+      attachments: attachments.map(attachment => {
+        const base = {
+          filename: attachment.filename || attachment.name,
+          content: attachment.content || attachment.buffer,
+          contentType: attachment.contentType || attachment.mimetype
+        };
+
+        // Special handling for video attachments
+        if (base.contentType && base.contentType.startsWith('video/')) {
+          base.contentDisposition = 'attachment'; // Force download for videos
+        }
+
+        return base;
+      })
     };
 
     console.log('Mail options prepared:', {
@@ -82,26 +115,56 @@ const sendEmail = async (emailData) => {
 const scheduleEmail = async (emailData, scheduledTime) => {
   try {
     console.log('Scheduling email for:', scheduledTime);
-    console.log('Email data:', {
-      to: emailData.to,
-      subject: emailData.subject,
-      contentLength: emailData.content?.length,
-      attachmentsCount: emailData.attachments?.length
-    });
+    
+    // Parse the scheduled time
+    const scheduledDate = new Date(scheduledTime);
+    
+    // Validate the scheduled time
+    if (scheduledDate <= new Date()) {
+      throw new Error('Scheduled time must be in the future');
+    }
 
-    const job = schedule.scheduleJob(new Date(scheduledTime), async () => {
+    // Create a draft email in Gmail
+    const { to, subject, content, attachments = [] } = emailData;
+    
+    // Preserve formatting in both HTML and plain text
+    const htmlContent = preserveFormatting(content);
+    const plainTextContent = htmlToPlainText(htmlContent);
+    
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      html: htmlContent,
+      text: plainTextContent,
+      attachments: attachments.map(attachment => ({
+        filename: attachment.filename || attachment.name,
+        content: attachment.content || attachment.buffer,
+        contentType: attachment.contentType || attachment.mimetype
+      })),
+      sendAt: scheduledDate, // Gmail API scheduling
+      timeZone: 'Asia/Kolkata' // Use Indian timezone
+    };
+
+    // Schedule the email using node-schedule
+    const job = schedule.scheduleJob(scheduledDate, async () => {
       try {
-        await sendEmail(emailData);
-        console.log('Scheduled email sent successfully');
+        console.log('Executing scheduled email to:', to);
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Scheduled email sent successfully:', info);
       } catch (error) {
         console.error('Error sending scheduled email:', error);
       }
     });
 
+    // Store the scheduled job for potential cancellation
+    scheduledJobs[`${to}-${scheduledDate.getTime()}`] = job;
+
+    console.log('Email scheduled successfully for:', scheduledDate);
     return {
       success: true,
-      message: 'Email scheduled successfully',
-      scheduledTime: scheduledTime
+      message: `Email scheduled for ${scheduledDate.toLocaleString()}`,
+      scheduledTime: scheduledDate
     };
   } catch (error) {
     console.error('Error scheduling email:', error);
@@ -109,7 +172,31 @@ const scheduleEmail = async (emailData, scheduledTime) => {
   }
 };
 
+// Store scheduled jobs
+const scheduledJobs = {};
+
+// Add function to get all scheduled jobs
+const getScheduledJobs = () => {
+  return Object.entries(scheduledJobs).map(([key, job]) => ({
+    id: key,
+    nextInvocation: job.nextInvocation(),
+  }));
+};
+
+// Add function to cancel a scheduled job
+const cancelScheduledJob = (jobId) => {
+  const job = scheduledJobs[jobId];
+  if (job) {
+    job.cancel();
+    delete scheduledJobs[jobId];
+    return true;
+  }
+  return false;
+};
+
 module.exports = {
   sendEmail,
-  scheduleEmail
+  scheduleEmail,
+  getScheduledJobs,
+  cancelScheduledJob
 };

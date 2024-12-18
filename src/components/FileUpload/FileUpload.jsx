@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from 'react';
+import { useDropzone } from 'react-dropzone';
 import {
   Box,
   Button,
@@ -8,93 +9,143 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   IconButton,
-} from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
-import Papa from "papaparse";
+} from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { toast } from 'react-toastify';
+import Papa from 'papaparse';
 
-function FileUpload({
-  onFileUpload,
-  onRecipientsParsed,
-  onError,
-  acceptedFileTypes = "*",
-}) {
+const FileUpload = ({ onFileUpload, isRecipientUpload = false, onRecipientsParsed, onError }) => {
   const [files, setFiles] = useState([]);
 
-  const handleFileUpload = (event) => {
-    const newFiles = Array.from(event.target.files);
-    setFiles((prevFiles) => [...prevFiles, ...newFiles]);
-    onFileUpload && onFileUpload(newFiles);
+  const onDrop = useCallback(async (acceptedFiles) => {
+    if (isRecipientUpload) {
+      if (acceptedFiles.length !== 1) {
+        onError?.('Please upload only one CSV file');
+        return;
+      }
 
-    // If CSV file is uploaded, parse it for recipients
-    if (
-      newFiles.some((file) => file.name.toLowerCase().endsWith(".csv")) &&
-      onRecipientsParsed
-    ) {
-      const csvFile = newFiles.find((file) =>
-        file.name.toLowerCase().endsWith(".csv")
-      );
-      Papa.parse(csvFile, {
+      const file = acceptedFiles[0];
+      if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+        onError?.('Please upload a CSV file');
+        return;
+      }
+
+      Papa.parse(file, {
         complete: (results) => {
-          const recipients = results.data
-            .filter((row) => row.length > 0 && row[0])
-            .map((row) => ({
-              email: row[0],
-              name: row[1] || "",
-              variables: row.slice(2).reduce((acc, val, idx) => {
-                acc[`var${idx + 1}`] = val;
-                return acc;
-              }, {}),
-            }));
-          onRecipientsParsed(recipients);
+          if (results.errors.length > 0) {
+            onError?.('Error parsing CSV file');
+            return;
+          }
+
+          // Skip header row if present
+          const data = results.data.slice(results.data[0][0]?.toLowerCase() === 'name' ? 1 : 0);
+          
+          const recipients = data
+            .filter(row => row.length >= 2 && row[0] && row[1]) // Ensure row has name and email
+            .map(row => ({
+              name: row[0].trim(),
+              email: row[1].trim()
+            }))
+            .filter(({ email }) => {
+              // Basic email validation
+              const isValid = email.includes('@') && email.includes('.');
+              return isValid;
+            });
+
+          if (recipients.length === 0) {
+            onError?.('No valid recipients found in CSV. Format should be: Name, Email');
+            return;
+          }
+
+          onRecipientsParsed?.(recipients);
         },
         error: (error) => {
-          onError && onError("Error parsing CSV file: " + error.message);
+          onError?.(`Error reading CSV file: ${error.message}`);
         },
+        skipEmptyLines: true,
+        header: false
       });
+    } else {
+      setFiles(prevFiles => [...prevFiles, ...acceptedFiles]);
+      onFileUpload?.(acceptedFiles);
     }
+  }, [isRecipientUpload, onFileUpload, onRecipientsParsed, onError]);
+
+  const removeFile = (index) => {
+    setFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
   };
 
-  const handleRemoveFile = (index) => {
-    setFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
-  };
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: isRecipientUpload ? { 'text/csv': ['.csv'] } : undefined,
+    multiple: !isRecipientUpload
+  });
 
   return (
     <Box>
-      <input
-        type="file"
-        multiple
-        onChange={handleFileUpload}
-        accept={acceptedFileTypes}
-        style={{ display: "none" }}
-        id="file-upload-input"
-      />
-      <label htmlFor="file-upload-input">
-        <Button variant="contained" component="span">
-          Upload Files
+      <Box
+        {...getRootProps()}
+        sx={{
+          border: '2px dashed #ccc',
+          borderRadius: 2,
+          p: 2,
+          textAlign: 'center',
+          cursor: 'pointer',
+          backgroundColor: isDragActive ? 'action.hover' : 'background.paper',
+          transition: 'all 0.2s ease-in-out',
+          '&:hover': {
+            borderColor: 'primary.main',
+            backgroundColor: 'action.hover',
+            transform: 'translateY(-2px)',
+          }
+        }}
+      >
+        <input {...getInputProps()} />
+        <Button 
+          variant="outlined" 
+          component="span"
+          sx={{
+            '&:hover': {
+              transform: 'scale(1.02)',
+            },
+            transition: 'all 0.2s ease-in-out',
+          }}
+        >
+          {isRecipientUpload ? 'Upload CSV' : 'Upload Files'}
         </Button>
-      </label>
+        <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+          {isDragActive
+            ? 'Drop the file here...'
+            : isRecipientUpload
+            ? 'Drag and drop a CSV file, or click to select'
+            : 'Drag and drop files, or click to select'}
+        </Typography>
+        {isRecipientUpload && (
+          <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
+            CSV format: Name, Email (one per line)
+          </Typography>
+        )}
+      </Box>
 
-      <List>
-        {files.map((file, index) => (
-          <ListItem key={index}>
-            <ListItemText
-              primary={file.name}
-              secondary={`${(file.size / 1024).toFixed(2)} KB`}
-            />
-            <ListItemSecondaryAction>
-              <IconButton
-                edge="end"
-                aria-label="delete"
-                onClick={() => handleRemoveFile(index)}
-              >
-                <DeleteIcon />
-              </IconButton>
-            </ListItemSecondaryAction>
-          </ListItem>
-        ))}
-      </List>
+      {!isRecipientUpload && files.length > 0 && (
+        <List>
+          {files.map((file, index) => (
+            <ListItem key={index}>
+              <ListItemText
+                primary={file.name}
+                secondary={`${(file.size / 1024).toFixed(2)} KB`}
+              />
+              <ListItemSecondaryAction>
+                <IconButton edge="end" onClick={() => removeFile(index)}>
+                  <DeleteIcon />
+                </IconButton>
+              </ListItemSecondaryAction>
+            </ListItem>
+          ))}
+        </List>
+      )}
     </Box>
   );
-}
+};
 
 export default FileUpload;
