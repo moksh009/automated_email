@@ -1,239 +1,457 @@
 import React, { useState } from 'react';
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  Grid,
+import { 
+  Box, 
+  Paper, 
+  Typography, 
+  Button, 
+  List, 
+  ListItem, 
+  IconButton, 
   Chip,
-  IconButton,
-  CircularProgress,
-  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Collapse,
+  Stack,
+  Divider,
+  useTheme,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material';
-import { motion, AnimatePresence } from 'framer-motion';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import SendIcon from '@mui/icons-material/Send';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import EmailIcon from '@mui/icons-material/Email';
+import AttachmentIcon from '@mui/icons-material/Attachment';
+import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 
-const EmailList = ({ emails, onSendEmail, onScheduleEmail }) => {
-  const [sendingStates, setSendingStates] = useState({});
-  const [bulkSending, setBulkSending] = useState(false);
-  const [bulkScheduling, setBulkScheduling] = useState(false);
+function EmailList({ 
+  emails, 
+  onSendEmail, 
+  onScheduleEmail, 
+  onBulkSchedule,
+  onDeleteEmail,
+  onDeleteAllEmails,
+  sendingEmails,
+  schedulingEmails 
+}) {
+  const [selectedEmails, setSelectedEmails] = useState(new Set());
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState(null);
+  const [expandedEmail, setExpandedEmail] = useState(null);
+  const theme = useTheme();
 
-  const handleSendEmail = async (email, index) => {
-    setSendingStates(prev => ({ ...prev, [index]: 'sending' }));
-    try {
-      await onSendEmail(email);
-      setSendingStates(prev => ({ ...prev, [index]: 'sent' }));
-      setTimeout(() => {
-        setSendingStates(prev => {
-          const newState = { ...prev };
-          delete newState[index];
-          return newState;
-        });
-      }, 2000);
-    } catch (error) {
-      setSendingStates(prev => ({ ...prev, [index]: 'error' }));
-      toast.error(`Failed to send email to ${email.to}`);
-    }
+  const handleSelectEmail = (emailId, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedEmails(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(emailId)) {
+        newSet.delete(emailId);
+      } else {
+        newSet.add(emailId);
+      }
+      return newSet;
+    });
   };
 
-  const handleSendAll = async () => {
-    setBulkSending(true);
-    try {
-      await Promise.all(emails.map(email => onSendEmail(email)));
-      toast.success('All emails sent successfully!');
-    } catch (error) {
-      toast.error('Failed to send some emails');
-    } finally {
-      setBulkSending(false);
-    }
+  const handleSelectAll = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedEmails(prev => {
+      if (prev.size === emails.length) {
+        return new Set();
+      }
+      return new Set(emails.map(email => email.id));
+    });
   };
 
-  const handleScheduleAll = async () => {
-    setBulkScheduling(true);
-    try {
-      await Promise.all(emails.map(email => onScheduleEmail(email)));
-      toast.success('All emails scheduled successfully!');
-    } catch (error) {
-      toast.error('Failed to schedule some emails');
-    } finally {
-      setBulkScheduling(false);
-    }
+  const handleDelete = (emailId, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onDeleteEmail(emailId);
   };
 
-  if (!emails.length) return null;
+  const handleScheduleDialogOpen = () => {
+    if (selectedEmails.size === 0) {
+      toast.warn('Please select emails to schedule');
+      return;
+    }
+    setScheduleDialogOpen(true);
+  };
 
-  return (
-    <Box sx={{ mt: 4 }}>
-      <Box 
+  const handleScheduleDialogClose = () => {
+    setScheduleDialogOpen(false);
+    setScheduledTime(null);
+  };
+
+  const handleBulkSchedule = () => {
+    if (!scheduledTime) {
+      toast.warn('Please select a schedule time');
+      return;
+    }
+
+    const emailsToSchedule = emails.filter(email => selectedEmails.has(email.id));
+    onBulkSchedule(emailsToSchedule, scheduledTime);
+    handleScheduleDialogClose();
+    setSelectedEmails(new Set());
+  };
+
+  const handleBulkSend = () => {
+    if (selectedEmails.size === 0) {
+      toast.warn('Please select emails to send');
+      return;
+    }
+
+    const emailsToSend = emails.filter(email => selectedEmails.has(email.id));
+    emailsToSend.forEach(email => onSendEmail(email));
+    setSelectedEmails(new Set());
+  };
+
+  const handleExpand = (emailId) => {
+    setExpandedEmail(expandedEmail === emailId ? null : emailId);
+  };
+
+  if (!emails.length) {
+    return (
+      <Paper 
+        elevation={3} 
         sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          mb: 2 
+          p: 4,
+          textAlign: 'center',
+          bgcolor: 'background.paper',
+          borderRadius: 2,
+          position: 'relative',
+          overflow: 'hidden',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '4px',
+            background: (theme) => `linear-gradient(45deg, ${theme.palette.primary.main} 30%, ${theme.palette.secondary.main} 90%)`,
+          },
         }}
       >
-        <Typography variant="h5" component="div" sx={{ color: 'primary.main' }}>
-          Generated Emails ({emails.length})
+        <EmailIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+        <Typography variant="h6" color="text.secondary">
+          No emails generated yet
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleSendAll}
-            disabled={bulkSending || bulkScheduling}
-            startIcon={bulkSending ? <CircularProgress size={20} /> : <SendIcon />}
-            sx={{
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              },
-              transition: 'all 0.2s ease-in-out',
-            }}
-          >
-            {bulkSending ? 'Sending...' : 'Send All'}
-          </Button>
-          <Button
-            variant="outlined"
-            color="primary"
-            onClick={handleScheduleAll}
-            disabled={bulkSending || bulkScheduling}
-            startIcon={bulkScheduling ? <CircularProgress size={20} /> : <ScheduleIcon />}
-            sx={{
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-              },
-              transition: 'all 0.2s ease-in-out',
-            }}
-          >
-            {bulkScheduling ? 'Scheduling...' : 'Schedule All'}
-          </Button>
-        </Box>
-      </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          Fill in the form to generate personalized emails
+        </Typography>
+      </Paper>
+    );
+  }
 
-      <Grid container spacing={2}>
-        <AnimatePresence>
-          {emails.map((email, index) => (
-            <Grid item xs={12} key={index}>
+  return (
+    <>
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          borderRadius: 2,
+          overflow: 'hidden',
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '4px',
+            background: (theme) => `linear-gradient(45deg, ${theme.palette.primary.main} 30%, ${theme.palette.secondary.main} 90%)`,
+          },
+        }}
+      >
+        <Box sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: 600,
+                  color: 'primary.main',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+              >
+                <EmailIcon /> Generated Emails ({emails.length})
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={selectedEmails.size === emails.length && emails.length > 0}
+                    indeterminate={selectedEmails.size > 0 && selectedEmails.size < emails.length}
+                    onChange={handleSelectAll}
+                  />
+                }
+                label="Select All"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </Box>
+            <Stack direction="row" spacing={2}>
+              {emails.length > 0 && (
+                <>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<SendIcon />}
+                    onClick={handleBulkSend}
+                    disabled={selectedEmails.size === 0}
+                    sx={{
+                      py: 1,
+                      px: 2,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                      },
+                      transition: 'all 0.3s',
+                    }}
+                  >
+                    Send Selected
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    startIcon={<ScheduleIcon />}
+                    onClick={handleScheduleDialogOpen}
+                    disabled={selectedEmails.size === 0}
+                    sx={{
+                      py: 1,
+                      px: 2,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                      },
+                      transition: 'all 0.3s',
+                    }}
+                  >
+                    Schedule Selected
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<DeleteSweepIcon />}
+                    onClick={onDeleteAllEmails}
+                    sx={{
+                      py: 1,
+                      px: 2,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                      },
+                      transition: 'all 0.3s',
+                    }}
+                  >
+                    Delete All
+                  </Button>
+                </>
+              )}
+            </Stack>
+          </Box>
+        </Box>
+
+        <List sx={{ width: '100%', bgcolor: 'background.paper' }}>
+          <AnimatePresence>
+            {emails.map((email) => (
               <motion.div
+                key={email.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
+                transition={{ duration: 0.2 }}
               >
-                <Card 
-                  variant="outlined"
+                <ListItem
                   sx={{
-                    position: 'relative',
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    p: 2,
                     '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      bgcolor: 'action.hover',
                     },
-                    transition: 'all 0.2s ease-in-out',
                   }}
                 >
-                  <CardContent>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={8}>
-                        <Typography variant="subtitle1" gutterBottom>
-                          To: {email.recipientName} ({email.to})
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <Checkbox
+                        checked={selectedEmails.has(email.id)}
+                        onChange={(e) => handleSelectEmail(email.id, e)}
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{ '&:hover': { cursor: 'pointer' } }}
+                      />
+                      <Stack spacing={1}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+                          {email.to}
                         </Typography>
-                        <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                        <Typography variant="body2" color="text.secondary" noWrap>
                           Subject: {email.subject}
                         </Typography>
-                        <Typography 
-                          variant="body2" 
-                          color="textSecondary"
-                          sx={{ 
-                            whiteSpace: 'pre-wrap',
-                            maxHeight: '100px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {email.content}
-                        </Typography>
-                        {email.attachments?.length > 0 && (
-                          <Box sx={{ mt: 1 }}>
-                            <Typography variant="caption" color="textSecondary">
-                              Attachments:
-                            </Typography>
-                            {email.attachments.map((file, fileIndex) => (
-                              <Chip
-                                key={fileIndex}
-                                label={file.name}
-                                size="small"
-                                sx={{ ml: 1 }}
-                              />
-                            ))}
-                          </Box>
-                        )}
-                      </Grid>
-                      <Grid 
-                        item 
-                        xs={12} 
-                        sm={4} 
-                        sx={{ 
-                          display: 'flex', 
-                          justifyContent: 'flex-end',
-                          alignItems: 'center' 
+                      </Stack>
+                    </Stack>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {email.status && (
+                        <Chip 
+                          label={email.status}
+                          color={email.status === 'error' ? 'error' : 'success'}
+                          size="small"
+                          sx={{ mr: 1 }}
+                        />
+                      )}
+                      <IconButton
+                        onClick={() => onSendEmail(email)}
+                        disabled={sendingEmails.has(email.id) || schedulingEmails.has(email.id)}
+                        color="primary"
+                        sx={{
+                          '&:hover': {
+                            transform: 'translateY(-2px)',
+                          },
+                          transition: 'all 0.2s',
                         }}
                       >
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Tooltip title="Schedule Email">
-                            <IconButton
-                              color="primary"
-                              onClick={() => onScheduleEmail(email)}
-                              disabled={sendingStates[index] === 'sending'}
-                              sx={{
-                                '&:hover': {
-                                  transform: 'translateY(-2px)',
-                                  backgroundColor: 'action.hover',
-                                },
-                                transition: 'all 0.2s ease-in-out',
-                              }}
-                            >
-                              <ScheduleIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Send Email">
-                            <IconButton
-                              color="primary"
-                              onClick={() => handleSendEmail(email, index)}
-                              disabled={sendingStates[index] === 'sending'}
-                              sx={{
-                                '&:hover': {
-                                  transform: 'translateY(-2px)',
-                                  backgroundColor: 'action.hover',
-                                },
-                                transition: 'all 0.2s ease-in-out',
-                              }}
-                            >
-                              {sendingStates[index] === 'sending' && (
-                                <CircularProgress size={24} />
-                              )}
-                              {sendingStates[index] === 'sent' && (
-                                <CheckCircleIcon sx={{ color: 'success.main' }} />
-                              )}
-                              {!sendingStates[index] && <SendIcon />}
-                            </IconButton>
-                          </Tooltip>
+                        <SendIcon />
+                      </IconButton>
+                      <IconButton
+                        onClick={() => {
+                          setSelectedEmails(new Set([email.id]));
+                          setScheduleDialogOpen(true);
+                        }}
+                        disabled={sendingEmails.has(email.id) || schedulingEmails.has(email.id)}
+                        color="secondary"
+                        sx={{
+                          '&:hover': {
+                            transform: 'translateY(-2px)',
+                          },
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <ScheduleIcon />
+                      </IconButton>
+                      <IconButton
+                        onClick={(e) => handleDelete(email.id, e)}
+                        color="error"
+                        sx={{
+                          '&:hover': {
+                            transform: 'translateY(-2px)',
+                          },
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                      <IconButton
+                        onClick={() => handleExpand(email.id)}
+                        sx={{
+                          transform: expandedEmail === email.id ? 'rotate(180deg)' : 'none',
+                          transition: 'transform 0.3s',
+                        }}
+                      >
+                        {expandedEmail === email.id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                      </IconButton>
+                    </Box>
+                  </Box>
+
+                  <Collapse in={expandedEmail === email.id} timeout="auto" unmountOnExit>
+                    <Box sx={{ mt: 2, pl: 2 }}>
+                      <Typography variant="subtitle2" gutterBottom sx={{ color: 'text.secondary' }}>
+                        Content:
+                      </Typography>
+                      <Paper
+                        variant="outlined"
+                        sx={{
+                          p: 2,
+                          mb: 2,
+                          bgcolor: 'action.hover',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                          {email.content}
+                        </Typography>
+                      </Paper>
+
+                      {email.attachments?.length > 0 && (
+                        <Box sx={{ mt: 2 }}>
+                          <Typography 
+                            variant="subtitle2" 
+                            gutterBottom 
+                            sx={{ 
+                              color: 'text.secondary',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                            }}
+                          >
+                            <AttachmentIcon fontSize="small" /> Attachments:
+                          </Typography>
+                          <Stack direction="row" spacing={1} flexWrap="wrap">
+                            {email.attachments.map((file) => (
+                              <Chip
+                                key={file.name}
+                                label={file.name}
+                                size="small"
+                                variant="outlined"
+                                sx={{ m: 0.5 }}
+                              />
+                            ))}
+                          </Stack>
                         </Box>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
+                      )}
+
+                      {email.scheduledTime && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                          Scheduled for: {new Date(email.scheduledTime).toLocaleString()}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Collapse>
+
+                  <Divider sx={{ mt: 2 }} />
+                </ListItem>
               </motion.div>
-            </Grid>
-          ))}
-        </AnimatePresence>
-      </Grid>
-    </Box>
+            ))}
+          </AnimatePresence>
+        </List>
+      </Paper>
+
+      <Dialog open={scheduleDialogOpen} onClose={handleScheduleDialogClose}>
+        <DialogTitle>Schedule {selectedEmails.size} Email{selectedEmails.size > 1 ? 's' : ''}</DialogTitle>
+        <DialogContent>
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <DateTimePicker
+              label="Schedule Time"
+              value={scheduledTime}
+              onChange={setScheduledTime}
+              minDateTime={new Date()}
+              sx={{ mt: 2 }}
+            />
+          </LocalizationProvider>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleScheduleDialogClose}>Cancel</Button>
+          <Button 
+            onClick={handleBulkSchedule}
+            variant="contained" 
+            disabled={!scheduledTime}
+          >
+            Schedule
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
-};
+}
 
 export default EmailList;

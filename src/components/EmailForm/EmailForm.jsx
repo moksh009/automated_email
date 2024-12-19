@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Box, TextField, Typography, Paper, Grid, Button, Chip, Stack, Divider } from '@mui/material';
+import React, { useState, useContext } from 'react';
+import { Box, TextField, Typography, Paper, Grid, Button, Chip, Stack, Divider, useTheme } from '@mui/material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -9,8 +9,12 @@ import FileUpload from '../FileUpload/FileUpload';
 import EmailTemplates from '../EmailTemplates/EmailTemplates';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SendIcon from '@mui/icons-material/Send';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import TemplateIcon from '@mui/icons-material/Description';
 
-function EmailForm({ onEmailsGenerated, loading }) {
+function EmailForm({ onEmailGeneration, loading }) {
   const [recipients, setRecipients] = useState([]);
   const [recipientInput, setRecipientInput] = useState('');
   const [subject, setSubject] = useState('');
@@ -121,7 +125,7 @@ function EmailForm({ onEmailsGenerated, loading }) {
         };
       });
 
-      onEmailsGenerated(emails);
+      onEmailGeneration(emails);
       toast.success(`Generated ${emails.length} personalized emails`);
     } catch (error) {
       console.error('Error generating emails:', error);
@@ -137,45 +141,105 @@ function EmailForm({ onEmailsGenerated, loading }) {
     >
       <Grid container spacing={3}>
         {/* Left side - Email Details */}
-        <Grid item xs={12} md={7}>
-          <Paper 
-            elevation={3} 
-            sx={{ 
-              p: 3,
-              backgroundColor: '#ffffff',
-              position: 'relative',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '4px',
-                background: 'linear-gradient(45deg, #2196f3 30%, #f50057 90%)',
-              },
-            }}
+        <Grid item xs={12} md={8}>
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <Typography 
-              variant="h5" 
-              component="div" 
-              gutterBottom
+            <Paper 
+              elevation={3} 
               sx={{ 
-                color: 'primary.main',
-                fontWeight: 'medium'
+                p: 3,
+                position: 'relative',
+                borderRadius: 2,
+                overflow: 'hidden',
+                mb: 3,
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: (theme) => theme.shadows[6],
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '4px',
+                  background: (theme) => `linear-gradient(45deg, ${theme.palette.primary.main} 30%, ${theme.palette.secondary.main} 90%)`,
+                },
               }}
             >
-              Email Templates
-            </Typography>
-            <EmailTemplates onSelectTemplate={handleTemplateSelect} />
+              <Typography 
+                variant="h5" 
+                component="div" 
+                gutterBottom
+                sx={{ 
+                  color: 'primary.main',
+                  fontWeight: 600,
+                  mb: 3,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+              >
+                <TemplateIcon /> Email Templates
+              </Typography>
 
-            <Box sx={{ mt: 4 }}>
+              <EmailTemplates onSelectTemplate={handleTemplateSelect} />
+            </Paper>
+
+            <Paper 
+              elevation={3} 
+              sx={{ 
+                p: 3,
+                position: 'relative',
+                borderRadius: 2,
+                overflow: 'hidden',
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: (theme) => theme.shadows[6],
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '4px',
+                  background: (theme) => `linear-gradient(45deg, ${theme.palette.primary.main} 30%, ${theme.palette.secondary.main} 90%)`,
+                },
+              }}
+            >
+              <Typography 
+                variant="h5" 
+                component="div" 
+                gutterBottom
+                sx={{ 
+                  color: 'primary.main',
+                  fontWeight: 600,
+                  mb: 3,
+                }}
+              >
+                Compose Email
+              </Typography>
+
               <TextField
                 fullWidth
                 required
                 label="Subject"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                sx={{ mb: 3 }}
+                sx={{ 
+                  mb: 3,
+                  '& .MuiOutlinedInput-root': {
+                    '&:hover fieldset': {
+                      borderColor: 'primary.main',
+                    },
+                  },
+                }}
                 variant="outlined"
               />
 
@@ -187,166 +251,241 @@ function EmailForm({ onEmailsGenerated, loading }) {
                 label="Email Content"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                sx={{ mb: 3 }}
+                sx={{ 
+                  mb: 3,
+                  '& .MuiOutlinedInput-root': {
+                    '&:hover fieldset': {
+                      borderColor: 'primary.main',
+                    },
+                  },
+                }}
                 variant="outlined"
                 placeholder="Use {{name}} or {{first_name}} for personalization"
               />
 
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Attachments
+              <Box sx={{ mb: 3 }}>
+                <Typography 
+                  variant="subtitle1" 
+                  gutterBottom
+                  sx={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    color: 'text.secondary',
+                  }}
+                >
+                  <AttachFileIcon /> Attachments
                 </Typography>
                 <FileUpload
                   onFileUpload={(files) => setAttachments([...attachments, ...files])}
                 />
+                <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2 }}>
+                  <AnimatePresence>
+                    {attachments.map((file, index) => (
+                      <motion.div
+                        key={file.name}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Chip
+                          label={file.name}
+                          onDelete={() => {
+                            const newAttachments = [...attachments];
+                            newAttachments.splice(index, 1);
+                            setAttachments(newAttachments);
+                          }}
+                          sx={{
+                            m: 0.5,
+                            '&:hover': {
+                              backgroundColor: 'primary.light',
+                            },
+                          }}
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </Stack>
               </Box>
-            </Box>
-          </Paper>
-        </Grid>
 
-        {/* Right side - Recipients */}
-        <Grid item xs={12} md={5}>
-          <Paper 
-            elevation={3} 
-            sx={{ 
-              p: 3,
-              backgroundColor: '#ffffff',
-              position: 'relative',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '4px',
-                background: 'linear-gradient(45deg, #f50057 30%, #2196f3 90%)',
-              },
-            }}
-          >
-            <Typography 
-              variant="h5" 
-              component="div" 
-              gutterBottom
-              sx={{ color: 'primary.main' }}
-            >
-              Recipients ({recipients.length})
-            </Typography>
-
-            <Box sx={{ mb: 3 }}>
-              <TextField
-                fullWidth
-                multiline
-                rows={4}
-                value={recipientInput}
-                onChange={(e) => setRecipientInput(e.target.value)}
-                placeholder="Enter recipients in format:&#10;John Doe, john@example.com&#10;Jane Smith, jane@example.com"
-                helperText="Enter one recipient per line"
-                variant="outlined"
-                sx={{ mb: 2 }}
-              />
               <Button
-                variant="contained"
-                color="primary"
-                onClick={handleAddRecipients}
-                disabled={!recipientInput.trim()}
-                startIcon={<PersonAddIcon />}
-                sx={{ 
-                  mb: 2,
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  },
-                  transition: 'all 0.2s ease-in-out',
-                }}
-              >
-                Add Recipients
-              </Button>
-            </Box>
-
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Upload Recipients
-              </Typography>
-              <FileUpload
-                isRecipientUpload={true}
-                onRecipientsParsed={handleRecipientsParsed}
-                onError={(error) => toast.error(error)}
-              />
-            </Box>
-
-            <Divider sx={{ my: 2 }} />
-
-            <Box sx={{ mb: 3, maxHeight: '200px', overflowY: 'auto' }}>
-              <AnimatePresence>
-                {recipients.map((recipient, index) => (
-                  <motion.div
-                    key={recipient.email}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.2, delay: index * 0.05 }}
-                  >
-                    <Chip
-                      icon={<PersonAddIcon />}
-                      label={`${recipient.name} (${recipient.email})`}
-                      onDelete={() => removeRecipient(recipient.email)}
-                      deleteIcon={<DeleteIcon />}
-                      sx={{ 
-                        m: 0.5, 
-                        '&:hover': {
-                          transform: 'translateY(-2px)',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                        },
-                        transition: 'all 0.2s ease-in-out',
-                      }}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </Box>
-
-            <Stack spacing={2}>
-              <Button
-                variant="contained"
-                color="primary"
                 fullWidth
+                variant="contained"
                 onClick={handleGenerateEmails}
-                disabled={!recipients.length || !subject || !content || loading}
-                sx={{ 
+                disabled={loading || !recipients.length || !subject || !content}
+                startIcon={<SendIcon />}
+                sx={{
                   py: 1.5,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  transition: 'all 0.3s ease-in-out',
                   '&:hover': {
                     transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                   },
-                  transition: 'all 0.2s ease-in-out',
                 }}
               >
                 Generate Emails
               </Button>
+            </Paper>
+          </motion.div>
+        </Grid>
 
-              <LocalizationProvider dateAdapter={AdapterDateFns}>
-                <DateTimePicker
-                  label="Schedule Time"
-                  value={scheduledTime}
-                  onChange={(newValue) => {
-                    if (newValue && newValue > new Date()) {
-                      setScheduledTime(newValue);
-                    } else {
-                      toast.error('Please select a future date and time');
-                    }
+        {/* Right side - Recipients */}
+        <Grid item xs={12} md={4}>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+          >
+            <Paper 
+              elevation={3} 
+              sx={{ 
+                p: 3,
+                position: 'relative',
+                borderRadius: 2,
+                overflow: 'hidden',
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: (theme) => theme.shadows[6],
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '4px',
+                  background: (theme) => `linear-gradient(45deg, ${theme.palette.secondary.main} 30%, ${theme.palette.primary.main} 90%)`,
+                },
+              }}
+            >
+              <Typography 
+                variant="h5" 
+                component="div" 
+                gutterBottom
+                sx={{ 
+                  color: 'secondary.main',
+                  fontWeight: 600,
+                  mb: 3,
+                }}
+              >
+                Recipients
+              </Typography>
+
+              <TextField
+                fullWidth
+                multiline
+                rows={4}
+                label="Add Recipients"
+                value={recipientInput}
+                onChange={(e) => setRecipientInput(e.target.value)}
+                placeholder="Name, email@example.com"
+                helperText="Enter one recipient per line in the format: Name, email@example.com"
+                sx={{ 
+                  mb: 2,
+                  '& .MuiOutlinedInput-root': {
+                    '&:hover fieldset': {
+                      borderColor: 'secondary.main',
+                    },
+                  },
+                }}
+              />
+
+              <Button
+                fullWidth
+                variant="outlined"
+                color="secondary"
+                onClick={handleAddRecipients}
+                startIcon={<PersonAddIcon />}
+                sx={{
+                  mb: 3,
+                  py: 1,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  transition: 'all 0.3s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                  },
+                }}
+              >
+                Add Recipients
+              </Button>
+
+              <Box sx={{ mb: 3 }}>
+                <Typography 
+                  variant="subtitle1" 
+                  gutterBottom
+                  sx={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    color: 'text.secondary',
                   }}
-                  renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      fullWidth 
-                      variant="outlined"
-                    />
-                  )}
-                  minDateTime={new Date()}
+                >
+                  <UploadFileIcon /> Upload Recipients CSV
+                </Typography>
+                <FileUpload
+                  isRecipientUpload={true}
+                  onRecipientsParsed={handleRecipientsParsed}
+                  onError={(error) => toast.error(error)}
                 />
-              </LocalizationProvider>
-            </Stack>
-          </Paper>
+              </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
+                <Stack spacing={1}>
+                  <AnimatePresence>
+                    {recipients.map((recipient) => (
+                      <motion.div
+                        key={recipient.email}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Chip
+                          label={`${recipient.name} (${recipient.email})`}
+                          onDelete={() => removeRecipient(recipient.email)}
+                          color="secondary"
+                          variant="outlined"
+                          deleteIcon={<DeleteIcon />}
+                          sx={{
+                            width: '100%',
+                            justifyContent: 'space-between',
+                            py: 2,
+                            px: 1,
+                            '& .MuiChip-label': {
+                              whiteSpace: 'normal',
+                            },
+                            '&:hover': {
+                              backgroundColor: 'secondary.light',
+                              color: 'secondary.contrastText',
+                            },
+                          }}
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </Stack>
+              </Box>
+
+              {recipients.length > 0 && (
+                <Typography 
+                  variant="subtitle2" 
+                  sx={{ 
+                    mt: 2,
+                    textAlign: 'right',
+                    color: 'text.secondary',
+                  }}
+                >
+                  Total Recipients: {recipients.length}
+                </Typography>
+              )}
+            </Paper>
+          </motion.div>
         </Grid>
       </Grid>
     </motion.div>
