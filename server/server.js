@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 require('dotenv').config();
-const { sendEmail, scheduleEmail } = require('./emailService');
+const { sendEmail, scheduleEmail, createTransporter } = require('./emailService');
 
 const app = express();
 const port = 3001;
@@ -27,6 +27,21 @@ app.get('/', (req, res) => {
     EMAIL_PASSWORD: process.env.EMAIL_PASSWORD ? 'Set' : 'Not set'
   });
   res.json({ message: 'Email server is running' });
+});
+
+// Verify email credentials endpoint
+app.post('/verify-credentials', async (req, res) => {
+  try {
+    await createTransporter();
+    res.json({ success: true, message: 'Email credentials verified successfully' });
+  } catch (error) {
+    console.error('Error verifying credentials:', error);
+    res.status(401).json({ 
+      success: false, 
+      message: 'Invalid email credentials',
+      error: error.message 
+    });
+  }
 });
 
 // Send email endpoint

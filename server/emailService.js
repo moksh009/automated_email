@@ -2,13 +2,50 @@ const nodemailer = require('nodemailer');
 const schedule = require('node-schedule');
 require('dotenv').config();
 
-console.log('Creating email transporter with config:', {
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER ? 'Set' : 'Not set',
-    pass: process.env.EMAIL_PASSWORD ? 'Set' : 'Not set'
+let transporter = null;
+
+// Function to create and verify transporter
+const createTransporter = () => {
+  console.log('Creating email transporter with config:', {
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER ? 'Set' : 'Not set',
+      pass: process.env.EMAIL_PASSWORD ? 'Set' : 'Not set'
+    }
+  });
+
+  // Create transporter with current credentials
+  transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD
+    }
+  });
+
+  // Verify transporter configuration
+  return transporter.verify()
+    .then(() => {
+      console.log('Transporter is ready to send emails');
+      return true;
+    })
+    .catch((error) => {
+      console.error('Transporter verification failed:', error);
+      transporter = null;
+      throw error;
+    });
+};
+
+// Initialize transporter
+createTransporter().catch(console.error);
+
+// Function to ensure transporter is valid
+const getTransporter = async () => {
+  if (!transporter) {
+    await createTransporter();
   }
-});
+  return transporter;
+};
 
 // Helper function to preserve line breaks and formatting
 const preserveFormatting = (content) => {
@@ -30,25 +67,14 @@ const htmlToPlainText = (html) => {
     .trim();
 };
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  }
-});
-
-// Verify transporter configuration
-transporter.verify(function(error, success) {
-  if (error) {
-    console.error('Transporter verification failed:', error);
-  } else {
-    console.log('Transporter is ready to send emails');
-  }
-});
-
 const sendEmail = async (emailData) => {
   try {
+    const currentTransporter = await getTransporter();
+    
+    if (!currentTransporter) {
+      throw new Error('Email service not configured properly. Please check your credentials.');
+    }
+
     console.log('Starting to send email with data:', {
       to: emailData.to,
       subject: emailData.subject,
@@ -95,7 +121,7 @@ const sendEmail = async (emailData) => {
     });
 
     console.log('Sending email...');
-    const info = await transporter.sendMail(mailOptions);
+    const info = await currentTransporter.sendMail(mailOptions);
     console.log('Email sent successfully:', info);
     
     return { 
@@ -150,7 +176,8 @@ const scheduleEmail = async (emailData, scheduledTime) => {
     const job = schedule.scheduleJob(scheduledDate, async () => {
       try {
         console.log('Executing scheduled email to:', to);
-        const info = await transporter.sendMail(mailOptions);
+        const currentTransporter = await getTransporter();
+        const info = await currentTransporter.sendMail(mailOptions);
         console.log('Scheduled email sent successfully:', info);
       } catch (error) {
         console.error('Error sending scheduled email:', error);
